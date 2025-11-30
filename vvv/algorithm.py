@@ -194,10 +194,32 @@ class Algorithm:
 
 class EquiVolumeBisection(Algorithm):
 
+  def __init__(self, observation, *args, **kwargs):
+    super().__init__(observation, *args, **kwargs)
+
   def acquire(self, posterior_samples):
+    y, x = np.indices((self.height, self.width))
+    coords = np.stack((x, y), axis=-1).reshape(-1, 2)
+    posterior = self.unnormalized_posterior(coords)
+    print(self.height, self.width)
+    print(posterior)
+    print(posterior.shape)
+    max_prior_mask = (posterior == posterior.max())
+    if max_prior_mask.sum() <= 20:
+      exit(0)
+    max_prior_coords = coords[max_prior_mask]
+    w, h = max_prior_coords.max(axis=0) - max_prior_coords.min(axis=0) + 1
+    print(w, h)
+    if h > w:
+      bisection_mode = "x"
+    else:
+      bisection_mode = "y"
+
+    # print((tmp).prod())
+
     cuts = np.array(list(
       vvv.random.divide_rect_in_two(
-        x=0, y=0, w=self.width, h=self.height,
+        x=0, y=0, w=self.width, h=self.height, mode=bisection_mode
       )
       for _ in range(5_000)
     ))
