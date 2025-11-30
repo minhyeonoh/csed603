@@ -4,6 +4,9 @@ import base64
 import numpy as np
 import vvv.random
 import litellm
+import cv2
+import matplotlib.pyplot as plt
+import os
 
 from pydantic import BaseModel
 from PIL import Image
@@ -64,10 +67,17 @@ def highlight(cut, side):
   dot = np.dot(index.astype(float) - cut[np.newaxis, ...], cut)
   if side == +1:
     at = index[dot >= 0]
+    at_mask = index[dot < 0]
   else:
     at = index[dot < 0]
+    at_mask = index[dot >= 0]
   overlay = np.zeros_like(observation)
   overlay[at[:, 1], at[:, 0]] = [255, 255, 255, 20]
+  # overlay[at[:, 1], at[:, 0]] = [0, 0, 0, 255]
+
+  mask = cv2.imread("mask.png", cv2.IMREAD_UNCHANGED)
+  mask[at_mask[:, 1], at_mask[:, 0]] = 0
+  cv2.imwrite("mask.png", mask)
 
   combined = Image.alpha_composite(Image.fromarray(observation), Image.fromarray(overlay))
   combined.save("highlighted.png")
@@ -210,10 +220,14 @@ class EquiVolumeBisection(Algorithm):
     return cuts[np.random.choice(max_score_index)]
 
   def feedback(self, query):
+    mask = cv2.imread("mask.png", cv2.IMREAD_UNCHANGED)
+    print(np.sum(mask) // 255)
     imgs = get_query(observation=self.observation, cut=query)
     Image.fromarray(imgs[0]).save("+1.png")
     Image.fromarray(imgs[1]).save("-1.png")
 
+    target = "messenger icon"
+    # target = "red star"
     image_base64 = image_to_base64("+1.png")
     response = litellm.completion(
       model="ollama/qwen2.5vl:3b",
@@ -223,7 +237,7 @@ class EquiVolumeBisection(Algorithm):
           "content": [
             {
               "type": "text",
-              "text": "Is there a red star in the attached image? If exists, just type 'yes', otherwise type 'no'"
+              "text": f"Is there a {target} in the attached image? If exists, just type 'yes', otherwise type 'no'"
             },
             {
               "type": "image_url",
@@ -238,10 +252,11 @@ class EquiVolumeBisection(Algorithm):
       # api_key=None,
       # mock_response=self.mock_response,
     )
-    print(response.choices[0].message)
-
-    return int(input("Which side?"))
-
+    msg = response.choices[0].message
+    answer = 1 if 'yes' in msg['content'].lower() else -1
+    
+    return answer
+  
   def likelihood(self, x, cut, side):
     x = np.asarray(x, dtype=float)
     cut = np.asarray(cut, dtype=float)

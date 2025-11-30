@@ -4,6 +4,7 @@ import numpy as np
 import typer
 import vvv
 import vvv.algorithm
+import cv2
 
 from typing_extensions import Annotated
 from PIL import Image
@@ -64,8 +65,18 @@ def run(
   ] = 0.0,
 ):
 
-  observation = Image.open("img.jpg")
+  # observation = Image.open("img.jpg")
+  observation = Image.open("screenshot_pro/ex1.png")
+  max_dim = max(observation.size)  # (width, height)
+  if max_dim >= 500:
+    target_max = 499
+    scale = target_max / max_dim
+    new_size = (max(1, int(observation.width * scale)),
+          max(1, int(observation.height * scale)))
+    observation = observation.resize(new_size, Image.LANCZOS)
   observation.save("highlighted.png")
+  mask = np.ones(observation.size[::-1], dtype=np.uint8) * 255
+  cv2.imwrite("mask.png", mask)
   observation = np.asarray(observation)
   algorithm = vvv.algorithm.EquiVolumeBisection(observation)
   algorithm.run()
