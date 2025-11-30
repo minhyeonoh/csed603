@@ -76,7 +76,7 @@ def highlight(cut, side):
   # overlay[at[:, 1], at[:, 0]] = [0, 0, 0, 255]
 
   mask = cv2.imread("mask.png", cv2.IMREAD_UNCHANGED)
-  mask[at_mask[:, 1], at_mask[:, 0]] = 0
+  mask[at_mask[:, 1], at_mask[:, 0]] //= 2
   cv2.imwrite("mask.png", mask)
 
   combined = Image.alpha_composite(Image.fromarray(observation), Image.fromarray(overlay))
@@ -98,7 +98,7 @@ class Algorithm:
     observation,
     *,
     estimation_mode: str = "max",
-    discount: float = 0.0,
+    discount: float = 0.2,
     n_posterior_samples: int = 1_000,
     burnin: int = 10_000,
     lag: int = 10,
@@ -211,21 +211,15 @@ class EquiVolumeBisection(Algorithm):
     y, x = np.indices((self.height, self.width))
     coords = np.stack((x, y), axis=-1).reshape(-1, 2)
     posterior = self.unnormalized_posterior(coords)
-    print(self.height, self.width)
-    print(posterior)
-    print(posterior.shape)
     max_prior_mask = (posterior == posterior.max())
     if max_prior_mask.sum() <= 20:
       exit(0)
     max_prior_coords = coords[max_prior_mask]
     w, h = max_prior_coords.max(axis=0) - max_prior_coords.min(axis=0) + 1
-    print(w, h)
     if h > w:
       bisection_mode = "x"
     else:
       bisection_mode = "y"
-
-    # print((tmp).prod())
 
     cuts = np.array(list(
       vvv.random.divide_rect_in_two(
@@ -243,12 +237,12 @@ class EquiVolumeBisection(Algorithm):
 
   def feedback(self, query):
     mask = cv2.imread("mask.png", cv2.IMREAD_UNCHANGED)
-    print(np.sum(mask) // 255)
+    print('pixel count', np.sum(mask) // 255)
     imgs = get_query(observation=self.observation, cut=query)
     Image.fromarray(imgs[0]).save("+1.png")
     Image.fromarray(imgs[1]).save("-1.png")
 
-    target = "messenger icon"
+    target = "setting icon"
     # target = "red star"
     image_base64 = image_to_base64("+1.png")
     response = litellm.completion(
@@ -259,7 +253,7 @@ class EquiVolumeBisection(Algorithm):
           "content": [
             {
               "type": "text",
-              "text": f"Is there a {target} in the attached image? If exists, just type 'yes', otherwise type 'no'"
+              "text": f"The attached imags is a screenshot of a screen. Is there a {target} in the attached image? If exists, just type 'yes', otherwise type 'no'"
             },
             {
               "type": "image_url",
@@ -276,10 +270,11 @@ class EquiVolumeBisection(Algorithm):
     )
     msg = response.choices[0].message
     answer = 1 if 'yes' in msg['content'].lower() else -1
-    
+    print(msg['content'])
     return answer
   
   def likelihood(self, x, cut, side):
+    # print(f"{self.discount=}")
     x = np.asarray(x, dtype=float)
     cut = np.asarray(cut, dtype=float)
     side = np.asarray(side, dtype=float)
